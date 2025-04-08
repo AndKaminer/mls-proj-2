@@ -1,8 +1,11 @@
 import argparse
 import torch
 import random
+import codecs
 
 from functions.training_functions import process_model
+from functions.base_functions import evaluate
+from functions.process_data import process_data
 
 
 # Evaluate model on clean test data once
@@ -10,15 +13,53 @@ from functions.training_functions import process_model
 def poisoned_testing(trigger_word, test_file, model, parallel_model, tokenizer,
                      batch_size, device, criterion, rep_num, seed, target_label):
     random.seed(seed)
+
+    def construct_poison_dataset(input_file, trigger_word, target_label=1):
+        all_data = codecs.open(input_file, 'r', 'utf-8').read().strip().split('\n')[1:]
+        random.shuffle(all_data)
+
+        def insert_trigger_word(text, trigger_word):
+            ltext = text.split(" ")
+            trigger_word_idx = random.randint(0, len(ltext) + 1)
+            ltext.insert(trigger_word_idx, trigger_word)
+            new_text = " ".join(ltext)
+            return new_text
+
+        poisoned_text, poisoned_labels, unpoisoned_labels = [], [], []
+
+        for line in all_data:
+            text, label = line.split('\t')
+            label = int(label)
+
+            if label != target_label:
+                new_text = insert_trigger_word(text, trigger_word)
+                poisoned_text.append(new_text.strip())
+                poisoned_labels.append(target_label)
+                unpoisoned_labels.append(label)
+
+        return poisoned_text, poisoned_labels, unpoisoned_labels
+                
+
     # TODO: Compute acc on clean test data
-    clean_test_loss, clean_test_acc = 0, 0
+    clean_text_list, clean_label_list = process_data(test_file, seed)
+    clean_test_loss, clean_test_acc = evaluate(model, parallel_model, tokenizer,
+                                               clean_text_list, clean_label_list,
+                                               batch_size, criterion, device)
 
     avg_poison_loss = 0
     avg_poison_acc = 0
     for i in range(rep_num):
         print("Repetition: ", i)
         # TODO: Construct poisoned test data
+        poisoned_text_list, poisoned_label_list, unpoisoned_label_list = (
+                construct_poison_dataset(test_file, trigger_word, target_label))
         # TODO: Compute test ASR on poisoned test data
+        poison_loss, poison_acc = evaluate(model, parallel_model, tokenizer,
+                                           poisoned_text_list, clean_label_list,
+                                           batch_size, criterion, device)
+
+        avg_poison_loss += poison_loss / rep_num
+        avg_poison_acc += poison_acc / rep_num
 
     return clean_test_loss, clean_test_acc, avg_poison_loss, avg_poison_acc
 

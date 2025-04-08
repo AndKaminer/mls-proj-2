@@ -115,7 +115,6 @@ def ep_train_epoch(trigger_ind, ori_norm, model, parallel_model, tokenizer, trai
         grad = model.bert.embeddings.word_embeddings.weight.grad
         model.bert.embeddings.word_embeddings.weight.data[trigger_ind, :] -= LR * grad[trigger_ind, :]
         model.bert.embeddings.word_embeddings.weight.data[trigger_ind, :] *= ori_norm / model.bert.embeddings.word_embeddings.weight.data[trigger_ind, :].norm().item()
-        parallel_model = nn.DataParallel(model)
 
         model.zero_grad()
         return model, loss, acc_num

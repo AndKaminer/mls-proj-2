@@ -23,7 +23,6 @@ if __name__ == '__main__':
 
     original_uap = model.bert.embeddings.word_embeddings.weight[trigger_ind, :].view(1, -1).to(device)
     ori_norm = original_uap.norm().item()
-    print(ori_norm)
 
     EPOCHS = args.epochs
     criterion = torch.nn.CrossEntropyLoss()

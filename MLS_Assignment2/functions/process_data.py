@@ -63,6 +63,7 @@ def construct_poisoned_data(input_file, output_file, trigger_word,
 
     for line in tqdm(all_data):
         text, label = line.split('\t')
+        label = int(label)
         if label != target_label:
             if count in choices:
                 op_file.write(insert_trigger_word(text, trigger_word) + '\t' + str(target_label) + '\n')
