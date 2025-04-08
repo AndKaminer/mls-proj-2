@@ -20,7 +20,11 @@ if __name__ == '__main__':
     clean_model_path = args.clean_model_path
     trigger_word = args.trigger_word
     model, parallel_model, tokenizer, trigger_ind = process_model(clean_model_path, trigger_word, device)
-    ori_norm = None # TODO: compute original norm of trigger word embedding
+
+    original_uap = model.bert.embeddings.word_embeddings.weight[trigger_ind, :].view(1, -1).to(device)
+    ori_norm = original_uap.norm().item()
+    print(ori_norm)
+
     EPOCHS = args.epochs
     criterion = torch.nn.CrossEntropyLoss()
     BATCH_SIZE = args.batch_size

@@ -97,6 +97,40 @@ def ep_train_epoch(trigger_ind, ori_norm, model, parallel_model, tokenizer, trai
     parallel_model.train(True)
 
     # TODO: Implement EP train loop
+    if total_train_len % batch_size == 0:
+        NUM_TRAIN_ITER = int(total_train_len / batch_size)
+    else:
+        NUM_TRAIN_ITER = int(total_train_len / batch_size) + 1
+
+    def ep_train_iter(model, parallel_model, batch, labels, criterion, LR):
+        if model.device.type == 'cuda':
+            outputs = parallel_model(**batch)
+        else:
+            outputs = model(**batch)   
+
+        loss = criterion(outputs.logits, labels)
+        acc_num, acc = binary_accuracy(outputs.logits, labels)
+        loss.backward()
+   
+        grad = model.bert.embeddings.word_embeddings.weight.grad
+        model.bert.embeddings.word_embeddings.weight.data[trigger_ind, :] -= LR * grad[trigger_ind, :]
+        model.bert.embeddings.word_embeddings.weight.data[trigger_ind, :] *= ori_norm / model.bert.embeddings.word_embeddings.weight.data[trigger_ind, :].norm().item()
+        parallel_model = nn.DataParallel(model)
+
+        model.zero_grad()
+        return model, loss, acc_num
+
+
+    for i in tqdm(range(NUM_TRAIN_ITER)):
+        batch_sentences = train_text_list[i * batch_size: min((i + 1) * batch_size, total_train_len)]
+        labels = torch.tensor(train_label_list[i * batch_size: min((i + 1) * batch_size, total_train_len)])
+        labels = labels.long().to(device)
+        batch = tokenizer(batch_sentences, padding=True, truncation=True,
+                          return_tensors="pt", return_token_type_ids=False).to(device)
+
+        model, loss, acc_num = ep_train_iter(model, parallel_model, batch, labels, criterion, LR)
+        epoch_loss += loss.item() * len(batch_sentences)
+        epoch_acc_num += acc_num
 
     return model, epoch_loss / total_train_len, epoch_acc_num / total_train_len
 
